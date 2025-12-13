@@ -303,16 +303,107 @@ class SmartVisionSystem:
         
         return objects
     
+    def filter_redundant_objects(self, objects):
+        always_ignored = {
+            'Wheel', 'Tire', 'Window', 'License plate', 'Headlight', 
+            'Automotive lighting', 'Auto part', 'Vehicle door', 
+            'Light fixture', 'Roof', 'Wall', 'Ceiling', 'Floor'
+        }
+        
+        objects = [obj for obj in objects if obj['label'] not in always_ignored]
+        
+        object_priority = {
+            'Person': 1, 'Car': 1, 'Bicycle': 1, 'Motorcycle': 1,
+            'Bus': 1, 'Truck': 1, 'Animal': 1, 'Dog': 1, 'Cat': 1,
+            'Door': 2, 'Stairs': 2, 'Building': 2, 'Obstacle': 2,
+            'Table': 3, 'Chair': 3, 'Couch': 3, 'Bed': 3,
+            'Glasses': 5, 'Shoe': 5, 'Bag': 4, 'Phone': 4, 'Book': 5,
+            'Clothing': 8, 'Face': 9, 'Hand': 9, 'Head': 9
+        }
+        
+        smart_relations = {
+            'Car': {
+                'always_part': ['Wheel', 'Tire', 'License plate', 'Window', 'Headlight'],
+                'sometimes_part': ['Door', 'Bag']
+            },
+            'Building': {
+                'always_part': ['Window', 'Wall', 'Roof', 'Ceiling'],
+                'sometimes_part': ['Door']
+            },
+            'Person': {
+                'always_part': ['Face', 'Head', 'Hand', 'Arm', 'Leg', 'Eye', 'Nose', 'Ear', 'Clothing', 'Shirt', 'Pants'],
+                'sometimes_part': ['Glasses', 'Shoe', 'Footwear', 'Bag', 'Backpack', 'Phone', 'Book']
+            },
+            'Table': {
+                'sometimes_part': ['Book', 'Phone', 'Cup', 'Glasses', 'Laptop']
+            },
+            'Bicycle': {
+                'always_part': ['Wheel', 'Tire']
+            },
+            'Motorcycle': {
+                'always_part': ['Wheel', 'Tire']
+            }
+        }
+        
+        filtered = []
+        objects_sorted = sorted(objects, key=lambda x: object_priority.get(x['label'], 5))
+        
+        for obj in objects_sorted:
+            should_keep = True
+            
+            for parent_obj in filtered:
+                parent_label = parent_obj['label']
+                
+                if parent_label not in smart_relations:
+                    continue
+                
+                relations = smart_relations[parent_label]
+                
+                if obj['label'] in relations.get('always_part', []):
+                    distance_diff = abs(obj['estimated_distance'] - parent_obj['estimated_distance'])
+                    if distance_diff < 2.0:
+                        should_keep = False
+                        break
+                
+                elif obj['label'] in relations.get('sometimes_part', []):
+                    distance_diff = abs(obj['estimated_distance'] - parent_obj['estimated_distance'])
+                    
+                    if distance_diff < 0.8:
+                        should_keep = False
+                        break
+                    elif distance_diff >= 0.8:
+                        should_keep = True
+            
+            if should_keep:
+                filtered.append(obj)
+        
+        return filtered
+    
+    def filter_text_content(self, text):
+        if not text or len(text.strip()) == 0:
+            return None
+        
+        text = text.strip()
+        digit_count = sum(c.isdigit() for c in text)
+        alpha_count = sum(c.isalpha() for c in text)
+        total_chars = len(text)
+        
+        if total_chars < 15 and digit_count > total_chars * 0.6:
+            return None
+        
+        if total_chars <= 10 and alpha_count <= 3 and digit_count > 0:
+            return None
+        
+        return text
+    
     def format_distance(self, distance_meters):
         cm = int(distance_meters * 100)
         
         if distance_meters < 0.5:
             ar = "أقل من نص متر - قريب جداً"
-            en = "less than half a meter - very close"
         
         elif distance_meters < 1.0:
             ar = "نص متر"
-            en = "half a meter"
         
         elif distance_meters < 2.0:
             meters = int(distance_meters)
@@ -320,10 +411,8 @@ class SmartVisionSystem:
             
             if remaining_cm < 5:
                 ar = "متر واحد تقريباً"
-                en = "about one meter"
             else:
                 ar = f"متر و{remaining_cm} سنتيمتر"
-                en = f"one meter and {remaining_cm} centimeters"
         
         elif distance_meters < 5.0:
             meters = round(distance_meters, 1)
@@ -337,9 +426,7 @@ class SmartVisionSystem:
                 ar = arabic_numbers.get(meters, f"{meters} أمتار")
             else:
                 ar = f"{meters} متر"
-            
-            en = f"{meters} meters"
-        
+                    
         return {
             'ar': ar,
             'en':None,
@@ -377,16 +464,26 @@ class SmartVisionSystem:
         else:
             urgency = "INFO"
         
-        if texts:
-            text_str = " ".join(texts[:3])
+        important_text_objects = ['Traffic sign', 'Sign', 'Billboard', 'Building', 
+                                 'Door', 'Street light', 'Traffic light', 'Pole']
+        
+        filtered_texts = []
+        if texts and label in important_text_objects:
+            for text in texts[:3]:
+                filtered = self.filter_text_content(text)
+                if filtered:
+                    filtered_texts.append(filtered)
+        
+        if filtered_texts:
+            text_str = " ".join(filtered_texts[:2])
             text_ar = self.translate_with_cache(text_str) if not self._is_arabic(text_str) else text_str
             
             if urgency == "DANGER":
-                msg_ar = f"احذر! {label_ar} {position_ar}، على بعد {distance_ar}، مكتوب عليه: {text_ar}"
+                msg_ar = f"احذر! {label_ar} {position_ar}، على بعد {distance_ar}، مكتوب: {text_ar}"
             elif urgency == "WARNING":
-                msg_ar = f"انتبه، {label_ar} {position_ar}، على بعد {distance_ar}، مكتوب عليه: {text_ar}"
+                msg_ar = f"انتبه، {label_ar} {position_ar}، على بعد {distance_ar}، مكتوب: {text_ar}"
             else:
-                msg_ar = f"{label_ar} {position_ar}، على بعد {distance_ar}، مكتوب عليه: {text_ar}"
+                msg_ar = f"{label_ar} {position_ar}، على بعد {distance_ar}، مكتوب: {text_ar}"
         else:
             if urgency == "DANGER":
                 msg_ar = f"احذر! {label_ar} {position_ar}، على بعد {distance_ar}"
@@ -401,8 +498,8 @@ class SmartVisionSystem:
             'distance_meters': distance_m,
             'distance_formatted': distance_format,
             'position': position,
-            'has_text': len(texts) > 0,
-            'texts': texts
+            'has_text': len(filtered_texts) > 0,
+            'texts': filtered_texts
         }
     
     def _is_arabic(self, text):
@@ -418,7 +515,6 @@ class SmartVisionSystem:
         return total_chars > 0 and arabic_chars / total_chars > 0.5
     
     def process_image_from_flutter(self, base64_image, conf_threshold=0.5, enable_ocr=True, force_announce=False):
-
         try:
             image = self.decode_base64_image(base64_image)
             detection = self.detect_objects(image, conf_threshold)
@@ -428,6 +524,8 @@ class SmartVisionSystem:
             
             depth_map = self.estimate_depth(image)
             objects = self.extract_depth_info(detection, depth_map, image.shape)
+            
+            objects = self.filter_redundant_objects(objects)
             
             all_texts = []
             if enable_ocr:
@@ -459,12 +557,48 @@ class SmartVisionSystem:
             
             announcements.sort(key=lambda x: x['priority'])
             
-            top_messages = [item['message_ar'] for item in announcements[:3]]
+            unique_announcements = []
+            seen_combinations = set()
+            
+            for item in announcements:
+                message = item['message_ar']
+                
+                key_parts = []
+                
+                if 'احذر!' in message:
+                    obj_type = message.split('احذر!')[1].strip().split()[0]
+                elif 'انتبه،' in message:
+                    obj_type = message.split('انتبه،')[1].strip().split()[0]
+                else:
+                    obj_type = message.strip().split()[0]
+                
+                key_parts.append(obj_type)
+                
+                if 'أمامك' in message:
+                    key_parts.append('أمامك')
+                elif 'على يمينك' in message:
+                    key_parts.append('يمينك')
+                elif 'على يسارك' in message:
+                    key_parts.append('يسارك')
+                
+                unique_key = '_'.join(key_parts)
+                
+                if unique_key not in seen_combinations:
+                    seen_combinations.add(unique_key)
+                    unique_announcements.append(item)
+            
+            top_messages = [item['message_ar'] for item in unique_announcements[:3]]
             combined_text = ". ".join(top_messages)
             
-            audio_file = self.generate_audio(combined_text, language='ar')
+            audio_base64 = self.generate_audio(combined_text, language='ar')
             
-            return audio_file
+            result = {
+                'text': combined_text,
+                'audio_base64': audio_base64,
+                'messages': top_messages
+            }
+            
+            return result
             
         except Exception as e:
             return None
@@ -473,8 +607,16 @@ class SmartVisionSystem:
         try:
             timestamp = int(time.time() * 1000)
             filename = f"audio_{timestamp}.mp3"
+            
             tts = gTTS(text=text, lang=language, slow=False)
             tts.save(filename)
-            return filename
+            
+            with open(filename, 'rb') as audio_file:
+                audio_bytes = audio_file.read()
+                audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            
+            os.remove(filename)
+            
+            return audio_base64
         except Exception as e:
             return None
