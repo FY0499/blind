@@ -318,66 +318,117 @@ class SmartVisionSystem:
             'Door': 2, 'Stairs': 2, 'Building': 2, 'Obstacle': 2,
             'Table': 3, 'Chair': 3, 'Couch': 3, 'Bed': 3,
             'Glasses': 5, 'Shoe': 5, 'Bag': 4, 'Phone': 4, 'Book': 5,
-            'Clothing': 8, 'Face': 9, 'Hand': 9, 'Head': 9
+            'Clothing': 8, 'Face': 9, 'Hand': 9, 'Head': 9, 'Headphones': 9
         }
         
-        smart_relations = {
-            'Car': {
-                'always_part': ['Wheel', 'Tire', 'License plate', 'Window', 'Headlight'],
-                'sometimes_part': ['Door', 'Bag']
-            },
-            'Building': {
-                'always_part': ['Window', 'Wall', 'Roof', 'Ceiling'],
-                'sometimes_part': ['Door']
-            },
-            'Person': {
-                'always_part': ['Face', 'Head', 'Hand', 'Arm', 'Leg', 'Eye', 'Nose', 'Ear', 'Clothing', 'Shirt', 'Pants'],
-                'sometimes_part': ['Glasses', 'Shoe', 'Footwear', 'Bag', 'Backpack', 'Phone', 'Book']
-            },
-            'Table': {
-                'sometimes_part': ['Book', 'Phone', 'Cup', 'Glasses', 'Laptop']
-            },
-            'Bicycle': {
-                'always_part': ['Wheel', 'Tire']
-            },
-            'Motorcycle': {
-                'always_part': ['Wheel', 'Tire']
-            }
-        }
+        main_entities = {'Person', 'Car', 'Bicycle', 'Motorcycle', 'Building', 'Table', 'Desk', 'Chair', 'Couch', 'Bed'}
         
         filtered = []
         objects_sorted = sorted(objects, key=lambda x: object_priority.get(x['label'], 5))
         
         for obj in objects_sorted:
             should_keep = True
+            obj_bbox = obj['bbox']
+            obj_center = (obj['center_x'], obj['center_y'])
+            obj_distance = obj['estimated_distance']
             
             for parent_obj in filtered:
-                parent_label = parent_obj['label']
-                
-                if parent_label not in smart_relations:
+                if parent_obj['label'] not in main_entities:
                     continue
                 
-                relations = smart_relations[parent_label]
+                parent_bbox = parent_obj['bbox']
+                parent_center = (parent_obj['center_x'], parent_obj['center_y'])
+                parent_distance = parent_obj['estimated_distance']
                 
-                if obj['label'] in relations.get('always_part', []):
-                    distance_diff = abs(obj['estimated_distance'] - parent_obj['estimated_distance'])
-                    if distance_diff < 2.0:
-                        should_keep = False
-                        break
+                distance_diff = abs(obj_distance - parent_distance)
                 
-                elif obj['label'] in relations.get('sometimes_part', []):
-                    distance_diff = abs(obj['estimated_distance'] - parent_obj['estimated_distance'])
-                    
-                    if distance_diff < 0.8:
-                        should_keep = False
-                        break
-                    elif distance_diff >= 0.8:
-                        should_keep = True
+                bbox_overlap = self._calculate_bbox_overlap(obj_bbox, parent_bbox)
+                
+                spatial_proximity = self._calculate_spatial_proximity(obj_center, parent_center, obj_bbox, parent_bbox)
+                
+                size_ratio = self._calculate_size_ratio(obj_bbox, parent_bbox)
+                
+                if bbox_overlap > 0.7:
+                    should_keep = False
+                    break
+                
+                if distance_diff < 0.3 and bbox_overlap > 0.3:
+                    should_keep = False
+                    break
+                
+                if distance_diff < 0.5 and spatial_proximity < 0.2 and size_ratio < 0.3:
+                    should_keep = False
+                    break
+                
+                if parent_obj['label'] == 'Person':
+                    if distance_diff < 0.8 and (bbox_overlap > 0.1 or spatial_proximity < 0.3):
+                        person_related_items = {
+                            'Face', 'Head', 'Hand', 'Arm', 'Leg', 'Eye', 'Nose', 'Ear',
+                            'Clothing', 'Shirt', 'Pants', 'Shoe', 'Footwear',
+                            'Glasses', 'Headphones', 'Hat', 'Cap', 'Watch', 'Jewelry'
+                        }
+                        
+                        if obj['label'] in person_related_items:
+                            should_keep = False
+                            break
+                        
+                        held_items = {'Phone', 'Book', 'Bag', 'Backpack', 'Bottle', 'Cup', 'Keys', 'Wallet'}
+                        if obj['label'] in held_items and distance_diff < 0.4:
+                            should_keep = False
+                            break
             
             if should_keep:
                 filtered.append(obj)
         
         return filtered
+    
+    def _calculate_bbox_overlap(self, bbox1, bbox2):
+        x1_min, y1_min = bbox1['x_min'], bbox1['y_min']
+        x1_max, y1_max = bbox1['x_max'], bbox1['y_max']
+        x2_min, y2_min = bbox2['x_min'], bbox2['y_min']
+        x2_max, y2_max = bbox2['x_max'], bbox2['y_max']
+        
+        inter_x_min = max(x1_min, x2_min)
+        inter_y_min = max(y1_min, y2_min)
+        inter_x_max = min(x1_max, x2_max)
+        inter_y_max = min(y1_max, y2_max)
+        
+        if inter_x_max < inter_x_min or inter_y_max < inter_y_min:
+            return 0.0
+        
+        inter_area = (inter_x_max - inter_x_min) * (inter_y_max - inter_y_min)
+        bbox1_area = (x1_max - x1_min) * (y1_max - y1_min)
+        
+        if bbox1_area == 0:
+            return 0.0
+        
+        return inter_area / bbox1_area
+    
+    def _calculate_spatial_proximity(self, center1, center2, bbox1, bbox2):
+        cx1, cy1 = center1
+        cx2, cy2 = center2
+        
+        distance = np.sqrt((cx1 - cx2)**2 + (cy1 - cy2)**2)
+        
+        bbox2_width = bbox2['x_max'] - bbox2['x_min']
+        bbox2_height = bbox2['y_max'] - bbox2['y_min']
+        bbox2_diag = np.sqrt(bbox2_width**2 + bbox2_height**2)
+        
+        if bbox2_diag == 0:
+            return 1.0
+        
+        normalized_distance = distance / bbox2_diag
+        
+        return min(normalized_distance, 1.0)
+    
+    def _calculate_size_ratio(self, bbox1, bbox2):
+        area1 = (bbox1['x_max'] - bbox1['x_min']) * (bbox1['y_max'] - bbox1['y_min'])
+        area2 = (bbox2['x_max'] - bbox2['x_min']) * (bbox2['y_max'] - bbox2['y_min'])
+        
+        if area2 == 0:
+            return 1.0
+        
+        return area1 / area2
     
     def filter_text_content(self, text):
         if not text or len(text.strip()) == 0:
