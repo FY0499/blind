@@ -341,7 +341,7 @@ class SmartVisionSystem:
         text = text.strip()
         digit_count = sum(c.isdigit() for c in text)
         total_chars = len(text)
-        if total_chars < 15 and digit_count > total_chars * 0.6: 
+        if total_chars < 8 and digit_count > total_chars * 0.8:
             return None
         return text
     
@@ -351,7 +351,7 @@ class SmartVisionSystem:
             ar = "أقل من نص متر - قريب جداً"
         elif distance_meters < 1.0: 
             ar = "نص متر"
-        elif distance_meters < 5.0: 
+        elif distance_meters < 6.0: 
             ar = f"{round(distance_meters, 1)} متر"
         else: 
             ar = f"{round(distance_meters, 1)} متر"
@@ -385,13 +385,14 @@ class SmartVisionSystem:
         important_text_objects = ['Traffic sign', 'Sign', 'Billboard', 'Building', 'Door']
         filtered_texts = []
         if texts and label in important_text_objects:
-            for text in texts[:2]:
+            for text in texts[:]:
                 filtered = self.filter_text_content(text)
                 if filtered: 
                     filtered_texts.append(filtered)
         
         if filtered_texts:
-            text_str = " ".join(filtered_texts)
+            # ✓ دمج كل النصوص المفلترة
+            text_str = " ".join(filtered_texts).strip()
             text_ar = self.translate_with_cache(text_str) if not self._is_arabic(text_str) else text_str
             msg_ar = f"{label_ar} {position['ar']}، مكتوب: {text_ar}"
         else:
