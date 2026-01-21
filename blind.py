@@ -379,8 +379,18 @@ class SmartVisionSystem:
         position = obj['position']
         distance_format = self.format_distance(distance_m)
         label_ar = self.translate_with_cache(label)
+       
+        is_car = label.lower() in ['car', 'vehicle', 'automobile']
         
-        urgency = "DANGER" if distance_m < 0.5 else ("WARNING" if distance_m < 1.5 else "INFO")
+        if is_car and distance_m < 1.5:
+            urgency = "DANGER"
+            prefix = "حذر"
+        elif distance_m < 0.5:
+            urgency = "WARNING"
+            prefix = "انتبه"
+        else:
+            urgency = "INFO"
+            prefix = None
         
         important_text_objects = ['Traffic sign', 'Sign', 'Billboard', 'Building', 'Door']
         filtered_texts = []
@@ -391,12 +401,17 @@ class SmartVisionSystem:
                     filtered_texts.append(filtered)
         
         if filtered_texts:
-            # ✓ دمج كل النصوص المفلترة
             text_str = " ".join(filtered_texts).strip()
             text_ar = self.translate_with_cache(text_str) if not self._is_arabic(text_str) else text_str
-            msg_ar = f"{label_ar} {position['ar']}، مكتوب: {text_ar}"
+            if prefix:
+                msg_ar = f"{prefix}، {label_ar} {position['ar']}، مكتوب: {text_ar}"
+            else:
+                msg_ar = f"{label_ar} {position['ar']}، مكتوب: {text_ar}"
         else:
-            msg_ar = f"{label_ar} {position['ar']}، على بعد {distance_format['ar']}"
+            if prefix:
+                msg_ar = f"{prefix}، {label_ar} {position['ar']}، على بعد {distance_format['ar']}"
+            else:
+                msg_ar = f"{label_ar} {position['ar']}، على بعد {distance_format['ar']}"
             
         return {
             'urgency': urgency, 
