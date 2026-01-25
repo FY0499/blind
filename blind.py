@@ -39,7 +39,7 @@ class SmartVisionSystem:
         self.translation_cache = {}
         
         self.last_api_call_time = 0
-        self.min_api_interval = 1.2
+        self.min_api_interval = 0.0
         
         self.prev_frame_hash = None
         self.scene_cache = {} 
@@ -156,6 +156,24 @@ class SmartVisionSystem:
         
         count, _ = self.detection_history[obj_key]
         return count >= self.min_detection_frames
+    
+    def has_text_in_image(self, image):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        edges = cv2.Canny(gray, 100, 200)
+        
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        text_like_contours = 0
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)
+            aspect_ratio = w / float(h) if h > 0 else 0
+            area = cv2.contourArea(cnt)
+            
+            if 0.1 < aspect_ratio < 10 and 20 < area < 5000:
+                text_like_contours += 1
+        
+        return text_like_contours > 10
     
     def detect_objects(self, image, conf_threshold=0.5):
         self.api_call_count['object'] += 1
@@ -459,7 +477,7 @@ class SmartVisionSystem:
             objects = self.filter_redundant_objects(objects)
             
             all_texts = []
-            if enable_ocr:
+            if enable_ocr and self.has_text_in_image(image):
                 all_texts = self.detect_text_ocr(image)
                 objects = self.match_text_to_objects(objects, all_texts)
             
