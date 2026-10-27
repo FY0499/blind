@@ -1,48 +1,53 @@
 # Smart Vision System for Assistive Guidance
 
-A Python prototype exploring how computer vision can help visually impaired users understand nearby scenes. It combines object detection, OCR, approximate depth estimation, Arabic translation, and speech-related utilities to turn visual information into descriptions.
+A Python prototype exploring how computer vision can help visually impaired users understand nearby scenes. It combines object detection, OCR, relative depth estimation, Arabic translation, and speech-related utilities to turn visual information into descriptions.
 
-> **Status:** Prototype. This repository's main file defines a `SmartVisionSystem` class; it does not currently provide a ready-to-run `main()` entry point. Follow the integration notes below rather than expecting `python blind.py` to launch a complete application.
+## Problem it addresses
 
-## The problem it explores
+People with visual impairments may need support identifying objects and reading visible text in their surroundings. This project explores a pipeline that processes an image and generates a description that can be translated into Arabic for assistive use.
 
-People with visual impairments may need help identifying objects, reading visible text, and understanding where objects appear in a scene. This project explores a software pipeline that can describe visual content and provide Arabic output.
+> **Status:** Prototype. The repository currently defines a `SmartVisionSystem` class; it does not provide a complete ready-to-run command-line or webcam application.
 
-## Main features
+## Features
 
-- **Object detection:** sends images to Google Cloud Vision.
-- **OCR:** extracts text from supported images.
-- **Depth estimation:** uses MiDaS DPT-Hybrid to estimate relative scene depth.
-- **Arabic translation:** translates generated descriptions using `deep-translator`.
-- **Efficiency helpers:** tracks recent detections, caches scene information, and counts selected API calls.
+- Object detection and OCR using Google Cloud Vision.
+- Relative depth estimation with MiDaS DPT-Hybrid.
+- Arabic translation using `deep-translator`.
+- Detection-history and caching helpers.
 
 ## Demo
 
-No verified screenshot or recorded demo is included yet. Add your own screenshot or a short GIF/video after testing the full pipeline with a non-sensitive sample image. Do not present a mockup as a real execution result.
+A verified demo image or recording is not currently included. After testing the pipeline, add a real screenshot or short GIF under `assets/demo.gif` and embed it here. Do not use a mockup as evidence of a working run.
 
-Suggested location: `assets/demo.gif`
+## Technologies
 
-## Tech stack
+Python, OpenCV, NumPy, PyTorch, MiDaS DPT-Hybrid, Google Cloud Vision, Pillow, deep-translator, and gTTS. See [requirements.txt](./requirements.txt) for the dependency list.
 
-Python · OpenCV · NumPy · PyTorch · MiDaS · Google Cloud Vision · Pillow · deep-translator · gTTS
+## Installation
 
-## Setup
-
-Use a Python environment compatible with the pinned packages in `requirements.txt`.
+Use a Python version compatible with the packages listed in `requirements.txt`.
 
 ```bash
+git clone https://github.com/FY0499/blind.git
+cd blind
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-# source .venv/bin/activate
+```
 
+Windows:
+```powershell
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### Configure Google Cloud Vision
+macOS/Linux:
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-The constructor requires a path to a service-account JSON file or a JSON string containing service-account credentials:
+## Configuration and usage
+
+The class requires Google Cloud Vision credentials. Keep the service-account JSON outside the repository and configure the path securely.
 
 ```python
 from blind import SmartVisionSystem
@@ -50,23 +55,22 @@ from blind import SmartVisionSystem
 vision_system = SmartVisionSystem("PATH_TO_LOCAL_SERVICE_ACCOUNT.json")
 ```
 
-Keep the credentials file outside the repository. The snippet above initializes the system; it is **not** a full webcam or command-line demo. Inspect the public methods in `blind.py` and build an application entry point that passes images to the appropriate processing method.
+This snippet only initializes the class; it is not a complete demo. Inspect the public methods in [blind.py](./blind.py) and create a separate entry-point script that passes an image to the intended processing method. Until that entry point is implemented and tested, `python blind.py` should not be expected to launch an interactive application.
 
-## Run
+## Safety and limitations
 
-`python blind.py` currently defines the class but does not launch a complete interactive application. To make the project runnable from the command line, add a small `main()` function or a separate demo script that accepts an image path, initializes credentials securely, calls the intended processing method, and displays or speaks the result.
+- Never commit credentials or API keys.
+- Use consented, non-sensitive test images when sending data to cloud services.
+- MiDaS depth is an estimate, not a safety-critical distance measurement.
+- Runtime behavior depends on credentials, model downloads, internet access, and hardware.
 
-## Security and limitations
+## Requirements
 
-- Never commit service-account JSON files, API keys, or private credentials.
-- Images sent to cloud services may contain sensitive information; use consented test images.
-- MiDaS estimates relative depth; it does not provide a guaranteed, safety-critical distance measurement.
-- Runtime behavior depends on credentials, model downloads, internet access, and available hardware.
+Dependencies are listed in [requirements.txt](./requirements.txt).
 
-## Roadmap
+## Future improvements
 
-- [ ] Add a tested command-line or webcam entry point.
-- [ ] Include a real screenshot or short demo GIF from a successful run.
-- [ ] Add sample input/output and automated tests for image processing.
-- [ ] Improve configuration with environment variables and clearer error handling.
-- [ ] Document latency, API usage, and limitations on representative hardware.
+- Add and test a command-line or webcam demo.
+- Include a real screenshot or short demo GIF.
+- Add sample input/output and automated tests.
+- Improve environment-based configuration and error handling.
