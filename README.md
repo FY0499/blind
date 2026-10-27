@@ -8,6 +8,12 @@ People with visual impairments may need support identifying objects and reading 
 
 > **Status:** Prototype. The repository currently defines a `SmartVisionSystem` class; it does not provide a complete ready-to-run command-line or webcam application.
 
+
+
+https://github.com/user-attachments/assets/2cac324e-a28c-4736-8496-2159f7d11dbb
+
+
+
 ## Features
 
 - Object detection and OCR using Google Cloud Vision.
